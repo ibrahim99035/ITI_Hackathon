@@ -5,6 +5,12 @@ const asyncHandler = require('../utils/asyncHandler')
 const { success } = require('../utils/apiResponse')
 
 router.use('/auth', require('./auth'))
+router.use('/categories', require('./categories'))
+router.use('/books', require('./books'))
+router.use('/members', require('./members'))
+router.use('/loans', require('./loans'))
+router.use('/fines', require('./fines'))
+router.use('/reports', require('./reports'))
 
 router.get('/ping', (req, res) => success(res, { message: 'pong' }))
 
