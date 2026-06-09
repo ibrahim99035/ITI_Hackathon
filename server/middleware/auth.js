@@ -1,37 +1,35 @@
-const { requireAuth, clerkClient } = require('@clerk/express')
+const jwt = require('jsonwebtoken')
 const User = require('../models/User')
 const AppError = require('../utils/AppError')
+const asyncHandler = require('../utils/asyncHandler')
 
-const protect = requireAuth()
-
-const attachUser = async (req, res, next) => {
-  try {
-    const clerkId = req.auth.userId
-    let user = await User.findOne({ clerkId })
-
-    if (!user) {
-      const clerkUser = await clerkClient.users.getUser(clerkId)
-      user = await User.create({
-        clerkId,
-        email: clerkUser.emailAddresses[0].emailAddress,
-        name:  `${clerkUser.firstName} ${clerkUser.lastName}`
-      })
-    }
-
-    if (!user.isActive) return next(new AppError('Your account has been deactivated.', 403))
-
-    req.user = user
-    next()
-  } catch (err) {
-    next(err)
+const protect = asyncHandler(async (req, res, next) => {
+  let token
+  if (req.headers.authorization?.startsWith('Bearer')) {
+    token = req.headers.authorization.split(' ')[1]
   }
-}
+  if (!token) return next(new AppError('Not authenticated', 401))
+
+  let decoded
+  try {
+    decoded = jwt.verify(token, process.env.JWT_SECRET)
+  } catch {
+    return next(new AppError('Invalid or expired token', 401))
+  }
+
+  const user = await User.findById(decoded.id)
+  if (!user) return next(new AppError('User no longer exists', 401))
+  if (!user.isActive) return next(new AppError('Account deactivated', 403))
+
+  req.user = user
+  next()
+})
 
 const requireRole = (...roles) => (req, res, next) => {
-  if (!req.user) return next(new AppError('User not attached. Use attachUser first.', 500))
+  if (!req.user) return next(new AppError('Use protect middleware first', 500))
   if (!roles.includes(req.user.role))
-    return next(new AppError(`Access denied. Required role: ${roles.join(' or ')}`, 403))
+    return next(new AppError(`Access denied. Required: ${roles.join(' or ')}`, 403))
   next()
 }
 
-module.exports = { protect, attachUser, requireRole }
+module.exports = { protect, requireRole }
